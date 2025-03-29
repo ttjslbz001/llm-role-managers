@@ -1,0 +1,493 @@
+openapi: 3.0.0
+info:
+  title: LLM角色管理API
+  description: |
+    LLM角色管理系统的RESTful API接口，提供创建、编辑、查询和管理LLM角色的功能。
+    本API允许用户定义和管理大语言模型(LLM)的角色特性，包括角色的基本信息、行为特征和约束条件。
+  version: 0.1.0
+  contact:
+    name: LLM Role Managers Team
+servers:
+  - url: http://localhost:8000
+    description: 本地开发服务器
+
+tags:
+  - name: 角色管理
+    description: 角色创建、查询、更新和删除操作
+  - name: 系统
+    description: 系统健康检查和状态信息
+
+components:
+  schemas:
+    RoleCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: 角色名称
+          example: 技术顾问
+        description:
+          type: string
+          description: 角色描述
+          example: 提供技术咨询和问题解决方案
+        role_type:
+          type: string
+          description: 角色类型
+          example: advisor
+        language_style:
+          type: string
+          description: 语言风格，如专业、友好、技术性等
+          example: 专业
+        knowledge_domains:
+          type: array
+          description: 知识领域
+          items:
+            type: string
+          example: [编程, 软件开发, 系统架构]
+        response_mode:
+          type: string
+          description: 响应模式，如详细、简洁等
+          example: 详细
+        allowed_topics:
+          type: array
+          description: 允许讨论的主题
+          items:
+            type: string
+          example: [技术问题, 编程语言, 最佳实践]
+        forbidden_topics:
+          type: array
+          description: 禁止的主题或行为
+          items:
+            type: string
+          example: [非技术话题, 个人信息]
+    
+    RoleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 角色名称
+        description:
+          type: string
+          description: 角色描述
+        role_type:
+          type: string
+          description: 角色类型
+        language_style:
+          type: string
+          description: 语言风格
+        knowledge_domains:
+          type: array
+          description: 知识领域
+          items:
+            type: string
+        response_mode:
+          type: string
+          description: 响应模式
+        allowed_topics:
+          type: array
+          description: 允许讨论的主题
+          items:
+            type: string
+        forbidden_topics:
+          type: array
+          description: 禁止的主题或行为
+          items:
+            type: string
+    
+    RoleDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 角色唯一标识符
+          example: 88e8bfb9-d056-4d58-b3c1-3717cff7b29e
+        name:
+          type: string
+          description: 角色名称
+          example: 技术顾问
+        description:
+          type: string
+          description: 角色描述
+          example: 提供技术咨询和问题解决方案
+        role_type:
+          type: string
+          description: 角色类型
+          example: advisor
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2025-03-29T16:31:44.594171"
+        updated_at:
+          type: string
+          format: date-time
+          description: 最后更新时间
+          example: "2025-03-29T16:31:44.594171"
+        language_style:
+          type: string
+          description: 语言风格
+          example: 专业
+        knowledge_domains:
+          type: array
+          description: 知识领域
+          items:
+            type: string
+          example: [编程, 软件开发, 系统架构]
+        response_mode:
+          type: string
+          description: 响应模式
+          example: 详细
+        allowed_topics:
+          type: array
+          description: 允许讨论的主题
+          items:
+            type: string
+          example: [技术问题, 编程语言, 最佳实践]
+        forbidden_topics:
+          type: array
+          description: 禁止的主题或行为
+          items:
+            type: string
+          example: [非技术话题, 个人信息]
+    
+    ApiResponse:
+      type: object
+      required:
+        - status
+        - message
+        - success
+      properties:
+        status:
+          type: integer
+          description: HTTP状态码
+          example: 200
+        message:
+          type: string
+          description: 响应消息
+          example: 操作成功
+        success:
+          type: boolean
+          description: 操作是否成功
+          example: true
+        data:
+          type: object
+          description: 响应数据，根据请求类型不同而异
+    
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - message
+        - success
+      properties:
+        status:
+          type: integer
+          description: HTTP错误状态码
+          example: 404
+        message:
+          type: string
+          description: 错误消息
+          example: 资源不存在
+        success:
+          type: boolean
+          description: 始终为false
+          example: false
+        data:
+          type: object
+          description: 可能包含额外的错误信息
+          nullable: true
+    
+    RoleList:
+      type: object
+      properties:
+        roles:
+          type: array
+          description: 角色列表
+          items:
+            $ref: '#/components/schemas/RoleDetail'
+        count:
+          type: integer
+          description: 角色数量
+          example: 5
+        limit:
+          type: integer
+          description: 查询限制
+          example: 10
+        offset:
+          type: integer
+          description: 查询偏移量
+          example: 0
+    
+    SearchResult:
+      type: object
+      properties:
+        roles:
+          type: array
+          description: 匹配的角色列表
+          items:
+            $ref: '#/components/schemas/RoleDetail'
+        count:
+          type: integer
+          description: 匹配的角色数量
+          example: 2
+        query:
+          type: string
+          description: 搜索关键词
+          example: 技术
+    
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: 系统状态
+          example: healthy
+        message:
+          type: string
+          description: 状态描述
+          example: API服务运行正常
+
+  responses:
+    Success:
+      description: 操作成功
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'
+    
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    ServerError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+paths:
+  /roles:
+    post:
+      tags:
+        - 角色管理
+      summary: 创建新角色
+      description: 根据提供的数据创建新的LLM角色
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '200':
+          description: 角色创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RoleDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    get:
+      tags:
+        - 角色管理
+      summary: 列出所有角色
+      description: 获取角色列表，支持分页
+      operationId: listRoles
+      parameters:
+        - name: limit
+          in: query
+          description: 返回的最大角色数量
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          description: 分页偏移量
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: 成功获取角色列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RoleList'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /roles/{role_id}:
+    get:
+      tags:
+        - 角色管理
+      summary: 获取角色详情
+      description: 根据ID获取角色的详细信息
+      operationId: getRole
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功获取角色详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RoleDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    put:
+      tags:
+        - 角色管理
+      summary: 更新角色
+      description: 根据ID更新角色的信息
+      operationId: updateRole
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdate'
+      responses:
+        '200':
+          description: 角色更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RoleDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    delete:
+      tags:
+        - 角色管理
+      summary: 删除角色
+      description: 根据ID删除角色
+      operationId: deleteRole
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 角色删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /search-roles:
+    get:
+      tags:
+        - 角色管理
+      summary: 搜索角色
+      description: 根据关键词搜索角色
+      operationId: searchRoles
+      parameters:
+        - name: query
+          in: query
+          description: 搜索关键词
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 搜索成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /health:
+    get:
+      tags:
+        - 系统
+      summary: 健康检查
+      description: 检查API服务是否正常运行
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 服务运行正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'

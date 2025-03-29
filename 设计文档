@@ -1,0 +1,441 @@
+# 设计文档
+
+## 1. 系统概述
+
+LLM 角色管理框架是一个用于创建和管理大型语言模型预定义角色的系统。它允许用户定义角色的行为模式、知识范围和交互风格，从而使LLM能够在特定场景中表现出一致的特性。该框架采用模块化设计，基于SQLite提供数据持久化，并支持多种角色属性的自定义。
+
+## 2. 系统用例图
+
+```mermaid
+graph TD
+    User((用户))
+    Admin((管理员))
+    
+    %% 用户用例
+    UC1[创建角色]
+    UC2[选择预定义角色]
+    UC3[与角色对话]
+    UC4[管理会话历史]
+    UC5[编辑角色]
+    
+    %% 管理员用例
+    UC6[管理角色库]
+    UC7[创建角色模板]
+    UC8[分析角色使用情况]
+    UC9[系统配置管理]
+    
+    %% LLM系统
+    LLM[LLM服务]
+    
+    %% 关系
+    User -->|创建| UC1
+    User -->|选择| UC2
+    User -->|交互| UC3
+    User -->|查看/删除| UC4
+    User -->|修改| UC5
+    
+    Admin -->|管理| UC6
+    Admin -->|创建| UC7
+    Admin -->|分析| UC8
+    Admin -->|配置| UC9
+    
+    UC1 -->|使用| LLM
+    UC2 -->|加载| LLM
+    UC3 -->|调用| LLM
+    
+    %% 继承关系
+    Admin -.->|继承| User
+```
+
+## 3. 系统数据流图
+
+```mermaid
+graph TD
+    User((用户))
+    DB[(数据库)]
+    LLM[LLM服务]
+    
+    subgraph LLM角色管理框架
+        RC[角色创建/编辑]
+        RM[角色管理]
+        SM[会话管理]
+        PM[提示生成器]
+        LI[LLM接口]
+    end
+    
+    %% 外部交互
+    User -->|创建/选择角色| RC
+    User -->|发送消息| SM
+    LLM -->|响应| LI
+    
+    %% 内部数据流
+    RC -->|存储角色定义| DB
+    RM -->|获取角色| DB
+    RM -->|加载角色| PM
+    SM -->|存储会话/消息| DB
+    SM -->|获取历史消息| DB
+    SM -->|用户输入| PM
+    PM -->|构建提示| LI
+    LI -->|发送请求| LLM
+    LI -->|接收响应| SM
+    SM -->|返回响应| User
+```
+
+## 4. 系统类图
+
+```mermaid
+classDiagram
+    class Role {
+        +String id
+        +String name
+        +String description
+        +String role_type
+        +Dict attributes
+        +DateTime created_at
+        +DateTime updated_at
+        +to_dict()
+        +from_dict()
+        +update()
+    }
+    
+    class DatabaseBackend {
+        <<Abstract>>
+        +connect()
+        +disconnect()
+        +create_role()
+        +get_role()
+        +update_role()
+        +delete_role()
+        +list_roles()
+        +search_roles()
+        +create_session()
+        +add_message()
+        +get_session_messages()
+    }
+    
+    class SQLiteDatabase {
+        +String db_path
+        +connect()
+        +disconnect()
+        +create_role()
+        +get_role()
+        +update_role()
+        +delete_role()
+        +list_roles()
+        +search_roles()
+        +create_session()
+        +add_message()
+        +get_session_messages()
+    }
+    
+    class Session {
+        +String id
+        +String role_id
+        +String user_id
+        +Dict metadata
+        +DateTime created_at
+        +DateTime last_activity
+        +add_message()
+        +get_messages()
+    }
+    
+    class Message {
+        +String id
+        +String session_id
+        +String sender
+        +String content
+        +Dict metadata
+        +DateTime timestamp
+    }
+    
+    class LLMInterface {
+        <<Abstract>>
+        +generate_completion()
+        +generate_chat_completion()
+    }
+    
+    class OpenAIInterface {
+        +String api_key
+        +generate_completion()
+        +generate_chat_completion()
+    }
+    
+    class PromptGenerator {
+        +generate_system_prompt()
+        +format_conversation_history()
+        +enhance_prompt()
+    }
+    
+    DatabaseBackend <|-- SQLiteDatabase
+    LLMInterface <|-- OpenAIInterface
+    SQLiteDatabase --> Role : manages
+    SQLiteDatabase --> Session : manages
+    SQLiteDatabase --> Message : manages
+    Session --> Message : contains
+    Session --> Role : uses
+    PromptGenerator --> Role : uses
+    OpenAIInterface --> PromptGenerator : uses
+```
+
+## 5. 技术架构
+
+### 5.1 角色管理系统
+
+角色管理系统负责角色的定义、存储和检索。它建立在以下核心组件上：
+
+#### 5.1.1 角色模型
+
+- **基本信息**：
+  - 名称
+  - 描述
+  - 角色类型
+  
+- **行为特征**：
+  - 语言风格（如专业、友好、技术性等）
+  - 知识领域
+  - 响应模式（详细、简洁等）
+  
+- **约束条件**：
+  - 允许讨论的主题
+  - 禁止的主题或行为
+  - 角色边界
+
+#### 5.1.2 角色管理 API
+
+角色管理 API 基于服务层和 API 层的分离设计，实现了角色的完整生命周期管理。
+
+**目录结构**:
+```
+src/llm_roles/
+  ├── api/
+  │   ├── __init__.py
+  │   └── role_api.py      # 角色管理API层
+  └── services/
+      ├── __init__.py
+      └── role_manager.py  # 角色管理服务层
+```
+
+**服务层 (RoleManager)**:
+
+服务层提供核心业务逻辑，负责角色对象的处理和与数据库的交互：
+
+- `create_role()`: 创建新角色并持久化
+- `get_role()`: 根据ID检索角色
+- `update_role()`: 更新现有角色
+- `delete_role()`: 删除角色
+- `list_roles()`: 获取角色列表
+- `search_roles()`: 搜索角色
+
+**API层 (RoleAPI)**:
+
+API层负责请求验证、错误处理和响应格式化：
+
+- `create_role()`: 验证请求数据并调用服务层创建角色
+- `get_role()`: 获取单个角色
+- `update_role()`: 验证更新数据并调用服务层更新角色
+- `delete_role()`: 删除指定角色
+- `list_roles()`: 获取角色列表，支持分页
+- `search_roles()`: 根据关键词搜索角色
+
+**响应格式**:
+
+API响应采用统一格式，包含状态码、消息、成功标志和数据：
+
+```json
+{
+  "status": 200,
+  "message": "操作消息",
+  "success": true,
+  "data": {
+    // 返回的数据
+  }
+}
+```
+
+### 5.2 数据存储系统
+
+数据存储系统负责角色信息和会话历史的持久化。它基于SQLite实现，并支持JSON格式数据存储。主要包括：
+
+- 角色表：存储角色的基本信息和属性
+- 角色历史版本表：记录角色定义的历史变更
+- 会话表：存储用户与角色的对话会话
+- 消息表：记录会话中的详细对话内容
+
+#### 数据库模式
+
+```sql
+-- 角色表
+CREATE TABLE roles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    role_type TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    attributes JSON NOT NULL
+);
+
+-- 角色历史版本表
+CREATE TABLE role_versions (
+    version_id TEXT PRIMARY KEY,
+    role_id TEXT NOT NULL,
+    attributes JSON NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+
+-- 会话表
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    role_id TEXT NOT NULL,
+    user_id TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_activity TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    metadata JSON,
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+
+-- 消息表
+CREATE TABLE messages (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    content TEXT NOT NULL,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    metadata JSON,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+```
+
+### 5.3 LLM集成接口
+
+LLM集成接口负责将角色定义转换为提示工程格式，并与实际的LLM服务进行交互：
+
+- **提示模板**：根据角色特性生成增强提示
+- **上下文管理**：维护对话历史和角色一致性
+- **适配器**：支持不同LLM模型的接口适配
+
+## 6. 交互流程
+
+### 6.1 角色创建流程
+
+1. 用户提供角色基本信息（名称、描述、类型）
+2. 用户定义角色的行为特征（语言风格、知识领域、响应模式）
+3. 用户设置角色的约束条件（允许主题、禁止主题）
+4. 系统生成唯一角色ID并保存角色定义到数据库
+5. 返回创建成功的角色信息
+
+### 6.2 角色编辑流程
+
+1. 用户获取现有角色数据
+2. 用户修改角色属性
+3. 系统验证更新数据有效性
+4. 系统将更新应用到角色，并保存到数据库
+5. 系统可选择性地创建角色历史版本记录
+6. 返回更新后的角色信息
+
+### 6.3 角色加载流程
+
+1. 用户请求加载特定角色（通过ID或搜索）
+2. 系统从数据库检索角色数据
+3. 系统将数据库表示转换为角色对象
+4. 返回角色对象和完整属性
+5. 客户端可以开始使用该角色进行对话
+
+### 6.4 对话交互流程
+
+1. 用户选择现有角色或创建新角色
+2. 系统创建新会话或加载已有会话
+3. 用户发送消息
+4. 系统通过LLM集成接口处理消息
+5. 系统生成角色响应并返回给用户
+6. 消息历史记录被保存到数据库
+
+## 7. 代码实现细节
+
+### 7.1 角色管理服务层 (RoleManager)
+
+角色管理服务层是连接角色模型和数据存储的核心组件，主要实现以下功能：
+
+1. **创建角色**：接收角色属性，创建Role对象，并持久化到数据库
+2. **获取角色**：根据ID从数据库获取角色数据，并转换为Role对象
+3. **更新角色**：接收更新数据，应用到现有角色，并持久化更改
+4. **删除角色**：从数据库中删除指定角色
+5. **列出角色**：支持分页获取角色列表
+6. **搜索角色**：根据关键词搜索匹配的角色
+
+### 7.2 角色管理API层 (RoleAPI)
+
+API层封装服务层功能，提供统一的接口格式和错误处理：
+
+1. **请求验证**：验证请求参数的完整性和有效性
+2. **错误处理**：捕获服务层异常，提供友好的错误消息
+3. **响应格式化**：统一API响应格式，包含状态码、消息和数据
+4. **权限控制**：（未来扩展）验证用户是否有权操作指定角色
+
+## 8. 使用示例
+
+以下是角色管理基本用例的示例代码：
+
+```python
+# 初始化组件
+db = SQLiteDatabase("path/to/database.db")
+role_manager = RoleManager(db)
+role_api = RoleAPI(role_manager)
+
+# 创建角色
+role_data = {
+    'name': '技术顾问',
+    'description': '提供技术咨询和解决方案',
+    'role_type': 'advisor',
+    'language_style': '专业',
+    'knowledge_domains': ['编程', '软件开发'],
+}
+result = role_api.create_role(role_data)
+role_id = result['data']['id']
+
+# 获取角色
+role = role_api.get_role(role_id)
+
+# 更新角色
+updates = {'description': '更新的描述', 'response_mode': '简洁'}
+role_api.update_role(role_id, updates)
+
+# 列出所有角色
+roles = role_api.list_roles(limit=10, offset=0)
+```
+
+## 9. 未来扩展
+
+1. **角色版本控制**：实现角色历史版本的创建和恢复
+2. **角色模板**：预定义角色模板，支持快速创建常用角色
+3. **角色分享**：允许用户分享和导入角色定义
+4. **角色评估**：分析角色表现并提供优化建议
+5. **多租户支持**：实现多用户环境下的角色隔离和共享
+
+## 10. 扩展性设计
+
+系统采用模块化设计，以支持多种扩展场景：
+
+### 10.1 数据库后端扩展
+
+基于`DatabaseBackend`抽象类，可以轻松实现不同数据库后端：
+- SQLite：适用于单机、轻量级场景
+- PostgreSQL：适用于高并发、企业级场景
+- DynamoDB：适用于云端部署场景
+
+### 10.2 LLM提供商扩展
+
+基于`LLMInterface`抽象类，可以支持多种LLM服务：
+- OpenAI（GPT系列）
+- Anthropic（Claude系列）
+- Google（Gemini系列）
+- 本地部署模型
+
+### 10.3 角色模板扩展
+
+系统支持创建和导入角色模板，便于快速创建特定领域的角色：
+- 教育领域模板
+- 客服领域模板
+- 创意写作模板
+- 编程助手模板 

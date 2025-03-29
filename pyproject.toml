@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-roles"
+version = "0.1.0"
+description = "A framework for creating predefined roles for LLM models"
+readme = "README.md"
+authors = [
+    {name = "LLM Role Managers", email = "example@example.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "alembic",
+    "openai>=1.0.0",
+    "click",
+    "rich",
+    "pyyaml",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]",
+    "jinja2",
+]
+ui = [
+    "streamlit>=1.24.0",
+    "gradio>=3.36.0",
+]
+postgres = [
+    "psycopg2-binary",
+]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.4.0",
+    "ruff>=0.0.270",
+    "pre-commit",
+]
+
+[project.scripts]
+llm-roles = "llm_roles.cli.main:main"
+
+[tool.setuptools]
+packages = ["llm_roles"]
+package-dir = {"" = "src"}
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+select = ["E", "F", "B", "I"] 
