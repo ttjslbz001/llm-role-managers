@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = "http://localhost:8000"; // Direct connection to backend
+const API_BASE_URL = '/api'; // Using proxy in package.json to redirect to backend
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
