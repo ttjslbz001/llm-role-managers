@@ -21,7 +21,9 @@ if str(project_root) not in sys.path:
 
 from src.llm_roles.database.sqlite import SQLiteDatabase
 from src.llm_roles.services.role_manager import RoleManager
+from src.llm_roles.services.prompt_service import PromptService
 from src.llm_roles.api.role_api import RoleAPI
+from src.llm_roles.api.prompt_api import PromptAPI
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -96,6 +98,34 @@ class RoleUpdate(BaseModel):
     allowed_topics: Optional[List[str]] = None
     forbidden_topics: Optional[List[str]] = None
 
+class TemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    format: str = "openai"
+    role_types: Optional[List[str]] = None
+    template_content: str
+    variables: Optional[List[Dict[str, Any]]] = None
+
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    format: Optional[str] = None
+    role_types: Optional[List[str]] = None
+    template_content: Optional[str] = None
+    variables: Optional[List[Dict[str, Any]]] = None
+
+class PromptGenerateRequest(BaseModel):
+    format: Optional[str] = "openai"
+    type: Optional[str] = "complete"
+    template_id: Optional[str] = None
+    custom_variables: Optional[Dict[str, Any]] = None
+
+class PromptPreviewRequest(BaseModel):
+    template_id: str
+    format: Optional[str] = "openai"
+    type: Optional[str] = "complete"
+    custom_variables: Optional[Dict[str, Any]] = None
+
 class ApiResponse(BaseModel):
     status: int
     message: str
@@ -115,6 +145,19 @@ def get_role_api():
     db = SQLiteDatabase(str(db_path))
     role_manager = RoleManager(db)
     return RoleAPI(role_manager)
+
+def get_prompt_api():
+    """获取提示词API实例"""
+    db_path = project_root / "resource" / "db" / "llm_roles.db"
+    if not db_path.exists():
+        raise HTTPException(
+            status_code=500, 
+            detail="数据库不存在，请先运行初始化脚本: src/llm_roles/database/scripts/init_db.py"
+        )
+    
+    db = SQLiteDatabase(str(db_path))
+    prompt_service = PromptService(db)
+    return PromptAPI(prompt_service)
 
 # API路由
 @app.post("/roles", response_model=ApiResponse, tags=["角色管理"])
@@ -160,6 +203,137 @@ def search_roles(
 ):
     """搜索角色"""
     result = api.search_roles(query)
+    return result
+
+# 提示词模板管理API
+@app.post("/prompt-templates", response_model=ApiResponse, tags=["提示词管理"])
+def create_template(
+    template: TemplateCreate,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """创建提示词模板"""
+    result = api.create_template(template.model_dump(exclude_none=True))
+    return result
+
+@app.get("/prompt-templates/{template_id}", response_model=ApiResponse, tags=["提示词管理"])
+def get_template(
+    template_id: str,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """获取提示词模板详情"""
+    result = api.get_template(template_id)
+    return result
+
+@app.put("/prompt-templates/{template_id}", response_model=ApiResponse, tags=["提示词管理"])
+def update_template(
+    template_id: str,
+    template: TemplateUpdate,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """更新提示词模板"""
+    # 移除空值字段
+    update_data = {k: v for k, v in template.model_dump().items() if v is not None}
+    result = api.update_template(template_id, update_data)
+    return result
+
+@app.delete("/prompt-templates/{template_id}", response_model=ApiResponse, tags=["提示词管理"])
+def delete_template(
+    template_id: str,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """删除提示词模板"""
+    result = api.delete_template(template_id)
+    return result
+
+@app.get("/prompt-templates", response_model=ApiResponse, tags=["提示词管理"])
+def list_templates(
+    include_defaults: bool = Query(True, description="是否包含默认模板"),
+    limit: int = Query(100, description="返回的最大模板数量"),
+    offset: int = Query(0, description="分页偏移量"),
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """列出所有提示词模板"""
+    result = api.list_templates(include_defaults=include_defaults, limit=limit, offset=offset)
+    return result
+
+# 角色提示词生成API
+@app.get("/roles/{role_id}/prompt", response_model=ApiResponse, tags=["提示词生成"])
+def get_role_prompt(
+    role_id: str,
+    format: str = Query("openai", description="提示词格式(openai, anthropic等)"),
+    type: str = Query("complete", description="提示词类型(system, user, assistant, complete等)"),
+    template_id: Optional[str] = Query(None, description="使用的模板ID"),
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """获取角色提示词"""
+    result = api.generate_prompt(
+        role_id=role_id,
+        format=format,
+        prompt_type=type,
+        template_id=template_id
+    )
+    return result
+
+@app.post("/roles/{role_id}/prompt", response_model=ApiResponse, tags=["提示词生成"])
+def generate_role_prompt(
+    role_id: str,
+    request: PromptGenerateRequest,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """生成角色提示词（带自定义参数）"""
+    result = api.generate_prompt(
+        role_id=role_id,
+        format=request.format,
+        prompt_type=request.type,
+        template_id=request.template_id,
+        custom_vars=request.custom_variables
+    )
+    return result
+
+@app.post("/roles/{role_id}/preview-prompt", response_model=ApiResponse, tags=["提示词生成"])
+def preview_role_prompt(
+    role_id: str,
+    request: PromptPreviewRequest,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """预览角色使用特定模板的提示词"""
+    result = api.preview_prompt(
+        role_id=role_id,
+        template_id=request.template_id,
+        format=request.format,
+        prompt_type=request.type,
+        custom_vars=request.custom_variables
+    )
+    return result
+
+# 角色默认模板管理API
+@app.post("/roles/{role_id}/default-templates/{template_id}", response_model=ApiResponse, tags=["提示词管理"])
+def set_role_default_template(
+    role_id: str,
+    template_id: str,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """设置角色的默认模板"""
+    result = api.set_role_default_template(role_id, template_id)
+    return result
+
+@app.delete("/roles/{role_id}/default-templates/{template_id}", response_model=ApiResponse, tags=["提示词管理"])
+def remove_role_default_template(
+    role_id: str,
+    template_id: str,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """移除角色的默认模板"""
+    result = api.remove_role_default_template(role_id, template_id)
+    return result
+
+@app.get("/roles/{role_id}/default-templates", response_model=ApiResponse, tags=["提示词管理"])
+def get_role_default_templates(
+    role_id: str,
+    api: PromptAPI = Depends(get_prompt_api)
+):
+    """获取角色的默认模板列表"""
+    result = api.get_role_default_templates(role_id)
     return result
 
 # 健康检查

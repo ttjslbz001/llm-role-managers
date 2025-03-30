@@ -14,6 +14,10 @@ servers:
 tags:
   - name: 角色管理
     description: 角色创建、查询、更新和删除操作
+  - name: 提示词管理
+    description: 提示词模板创建、查询、更新和删除操作
+  - name: 提示词生成
+    description: 角色提示词生成和预览
   - name: 系统
     description: 系统健康检查和状态信息
 
@@ -152,6 +156,249 @@ components:
           items:
             type: string
           example: [非技术话题, 个人信息]
+    
+    TemplateCreate:
+      type: object
+      required:
+        - name
+        - template_content
+      properties:
+        name:
+          type: string
+          description: 模板名称
+          example: 技术助手模板
+        description:
+          type: string
+          description: 模板描述
+          example: 用于创建技术助手角色的模板
+        format:
+          type: string
+          description: 提示词格式
+          default: openai
+          example: openai
+        role_types:
+          type: array
+          description: 适用的角色类型
+          items:
+            type: string
+          example: [assistant, advisor]
+        template_content:
+          type: string
+          description: 模板内容
+          example: 你是{{name}}，一个{{role_type}}。你的职责是{{description}}，使用{{language_style}}的语言风格。
+        variables:
+          type: array
+          description: 模板变量
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: 变量名称
+              source:
+                type: string
+                description: 变量来源
+          example: [{"name": "name", "source": "name"}, {"name": "role_type", "source": "role_type"}]
+        is_default:
+          type: boolean
+          description: 是否为默认模板
+          default: false
+          example: false
+    
+    TemplateUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 模板名称
+        description:
+          type: string
+          description: 模板描述
+        format:
+          type: string
+          description: 提示词格式
+        role_types:
+          type: array
+          description: 适用的角色类型
+          items:
+            type: string
+        template_content:
+          type: string
+          description: 模板内容
+        variables:
+          type: array
+          description: 模板变量
+          items:
+            type: object
+        is_default:
+          type: boolean
+          description: 是否为默认模板
+    
+    TemplateDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 模板唯一标识符
+          example: 88e8bfb9-d056-4d58-b3c1-3717cff7b29e
+        name:
+          type: string
+          description: 模板名称
+          example: 技术助手模板
+        description:
+          type: string
+          description: 模板描述
+          example: 用于创建技术助手角色的模板
+        format:
+          type: string
+          description: 提示词格式
+          example: openai
+        role_types:
+          type: array
+          description: 适用的角色类型
+          items:
+            type: string
+          example: [assistant, advisor]
+        template_content:
+          type: string
+          description: 模板内容
+          example: 你是{{name}}，一个{{role_type}}。你的职责是{{description}}，使用{{language_style}}的语言风格。
+        variables:
+          type: array
+          description: 模板变量
+          items:
+            type: object
+          example: [{"name": "name", "source": "name"}, {"name": "role_type", "source": "role_type"}]
+        is_default:
+          type: boolean
+          description: 是否为默认模板
+          example: false
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2025-03-29T16:31:44.594171"
+        updated_at:
+          type: string
+          format: date-time
+          description: 最后更新时间
+          example: "2025-03-29T16:31:44.594171"
+    
+    PromptGenerateRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          description: 提示词格式(openai, anthropic等)
+          default: openai
+          example: openai
+        type:
+          type: string
+          description: 提示词类型(system, user, assistant, complete等)
+          default: complete
+          example: system
+        template_id:
+          type: string
+          description: 使用的模板ID
+          example: 88e8bfb9-d056-4d58-b3c1-3717cff7b29e
+        custom_variables:
+          type: object
+          description: 自定义变量
+          example: {"extra_field": "自定义值"}
+    
+    PromptPreviewRequest:
+      type: object
+      required:
+        - template_id
+      properties:
+        template_id:
+          type: string
+          description: 使用的模板ID
+          example: 88e8bfb9-d056-4d58-b3c1-3717cff7b29e
+        format:
+          type: string
+          description: 提示词格式(openai, anthropic等)
+          default: openai
+          example: openai
+        type:
+          type: string
+          description: 提示词类型(system, user, assistant, complete等)
+          default: complete
+          example: system
+        custom_variables:
+          type: object
+          description: 自定义变量
+          example: {"extra_field": "自定义值"}
+    
+    PromptResult:
+      type: object
+      properties:
+        role_id:
+          type: string
+          description: 角色ID
+          example: 88e8bfb9-d056-4d58-b3c1-3717cff7b29e
+        role_name:
+          type: string
+          description: 角色名称
+          example: 技术顾问
+        prompt:
+          type: string
+          description: 生成的提示词
+          example: 你是技术顾问，一个advisor。你的职责是提供技术咨询和问题解决方案，使用专业的语言风格。
+        template_id:
+          type: string
+          description: 使用的模板ID
+          example: 88e8bfb9-d056-4d58-b3c1-3717cff7b29e
+        template_name:
+          type: string
+          description: 使用的模板名称
+          example: 技术助手模板
+        format:
+          type: string
+          description: 提示词格式
+          example: openai
+        type:
+          type: string
+          description: 提示词类型
+          example: system
+    
+    TemplateList:
+      type: object
+      properties:
+        templates:
+          type: array
+          description: 模板列表
+          items:
+            $ref: '#/components/schemas/TemplateDetail'
+        count:
+          type: integer
+          description: 模板数量
+          example: 5
+        limit:
+          type: integer
+          description: 查询限制
+          example: 10
+        offset:
+          type: integer
+          description: 查询偏移量
+          example: 0
+    
+    RoleDefaultTemplates:
+      type: object
+      properties:
+        templates:
+          type: array
+          description: 角色默认模板列表
+          items:
+            $ref: '#/components/schemas/TemplateDetail'
+        count:
+          type: integer
+          description: 模板数量
+          example: 2
+        role_id:
+          type: string
+          description: 角色ID
+          example: 88e8bfb9-d056-4d58-b3c1-3717cff7b29e
     
     ApiResponse:
       type: object
@@ -491,3 +738,407 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthCheckResponse'
+  
+  /prompt-templates:
+    post:
+      tags:
+        - 提示词管理
+      summary: 创建提示词模板
+      description: 创建新的提示词模板
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateCreate'
+      responses:
+        '201':
+          description: 提示词模板创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TemplateDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    get:
+      tags:
+        - 提示词管理
+      summary: 获取提示词模板列表
+      description: 获取所有提示词模板的列表，支持分页
+      operationId: listTemplates
+      parameters:
+        - name: include_defaults
+          in: query
+          description: 是否包含默认模板
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: limit
+          in: query
+          description: 返回的最大模板数量
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          description: 分页偏移量
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: 成功获取模板列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TemplateList'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /prompt-templates/{template_id}:
+    get:
+      tags:
+        - 提示词管理
+      summary: 获取提示词模板详情
+      description: 根据ID获取提示词模板的详细信息
+      operationId: getTemplate
+      parameters:
+        - name: template_id
+          in: path
+          description: 模板ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功获取模板详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TemplateDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    put:
+      tags:
+        - 提示词管理
+      summary: 更新提示词模板
+      description: 根据ID更新提示词模板的信息
+      operationId: updateTemplate
+      parameters:
+        - name: template_id
+          in: path
+          description: 模板ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateUpdate'
+      responses:
+        '200':
+          description: 模板更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TemplateDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    delete:
+      tags:
+        - 提示词管理
+      summary: 删除提示词模板
+      description: 根据ID删除提示词模板
+      operationId: deleteTemplate
+      parameters:
+        - name: template_id
+          in: path
+          description: 模板ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 模板删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /roles/{role_id}/prompt:
+    get:
+      tags:
+        - 提示词生成
+      summary: 获取角色提示词
+      description: 获取特定角色的提示词
+      operationId: getRolePrompt
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          description: 提示词格式(openai, anthropic等)
+          required: false
+          schema:
+            type: string
+            default: openai
+        - name: type
+          in: query
+          description: 提示词类型(system, user, assistant, complete等)
+          required: false
+          schema:
+            type: string
+            default: complete
+        - name: template_id
+          in: query
+          description: 使用的模板ID
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功获取提示词
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PromptResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    post:
+      tags:
+        - 提示词生成
+      summary: 生成角色提示词
+      description: 生成特定角色的提示词（带自定义参数）
+      operationId: generateRolePrompt
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptGenerateRequest'
+      responses:
+        '200':
+          description: 成功生成提示词
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PromptResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /roles/{role_id}/preview-prompt:
+    post:
+      tags:
+        - 提示词生成
+      summary: 预览角色提示词
+      description: 预览特定角色使用特定模板的提示词
+      operationId: previewRolePrompt
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptPreviewRequest'
+      responses:
+        '200':
+          description: 成功预览提示词
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PromptResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /roles/{role_id}/default-templates:
+    get:
+      tags:
+        - 提示词管理
+      summary: 获取角色默认模板列表
+      description: 获取特定角色的默认模板列表
+      operationId: getRoleDefaultTemplates
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功获取角色默认模板列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RoleDefaultTemplates'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  
+  /roles/{role_id}/default-templates/{template_id}:
+    post:
+      tags:
+        - 提示词管理
+      summary: 设置角色默认模板
+      description: 设置特定角色的默认模板
+      operationId: setRoleDefaultTemplate
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: template_id
+          in: path
+          description: 模板ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功设置角色默认模板
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    
+    delete:
+      tags:
+        - 提示词管理
+      summary: 移除角色默认模板
+      description: 移除特定角色的默认模板
+      operationId: removeRoleDefaultTemplate
+      parameters:
+        - name: role_id
+          in: path
+          description: 角色ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: template_id
+          in: path
+          description: 模板ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功移除角色默认模板
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'

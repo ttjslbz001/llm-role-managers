@@ -71,6 +71,33 @@ CREATE TABLE IF NOT EXISTS messages (
 )
 ''')
 
+# 创建提示词模板表
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS prompt_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    format TEXT NOT NULL,
+    role_types TEXT,
+    template_content TEXT NOT NULL,
+    variables JSON,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+''')
+
+# 创建角色默认模板关联表
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS role_default_templates (
+    role_id TEXT NOT NULL,
+    template_id TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (role_id, template_id),
+    FOREIGN KEY (role_id) REFERENCES roles(id),
+    FOREIGN KEY (template_id) REFERENCES prompt_templates(id)
+)
+''')
+
 # 提交更改并关闭连接
 conn.commit()
 conn.close()

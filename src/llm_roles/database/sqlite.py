@@ -253,9 +253,10 @@ class SQLiteDatabase:
                 'role_type': row[3],
             }
             
-            # 解析JSON属性并合并到角色对象
+            # 解析JSON属性并合并到结果中
             attributes = json.loads(row[4])
             role.update(attributes)
+            
             roles.append(role)
             
         return roles
@@ -413,4 +414,383 @@ class SQLiteDatabase:
                 
             messages.append(message)
             
-        return messages 
+        return messages
+    
+    # =========== 提示词模板操作 ===========
+    
+    def create_template(self, template_data: Dict[str, Any]) -> str:
+        """创建新提示词模板
+        
+        Args:
+            template_data: 模板数据字典
+            
+        Returns:
+            str: 创建的模板ID
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        
+        # 生成ID如果没有提供
+        template_id = template_data.get('id', str(uuid.uuid4()))
+        name = template_data.get('name', '')
+        description = template_data.get('description', '')
+        format = template_data.get('format', 'openai')
+        role_types = json.dumps(template_data.get('role_types', []))
+        template_content = template_data.get('template_content', '')
+        variables = json.dumps(template_data.get('variables', []))
+        
+        try:
+            cursor.execute("""
+                INSERT INTO prompt_templates (id, name, description, format, role_types, template_content, variables)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (template_id, name, description, format, role_types, template_content, variables))
+            
+            self.conn.commit()
+            print(f"Created prompt template: {template_id}")
+            return template_id
+        except Exception as e:
+            self.conn.rollback()
+            print(f"Error creating prompt template: {e}")
+            raise
+    
+    def get_template(self, template_id: str) -> Optional[Dict[str, Any]]:
+        """获取提示词模板信息
+        
+        Args:
+            template_id: 模板ID
+            
+        Returns:
+            模板信息字典，如果不存在返回None
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT id, name, description, format, role_types, template_content, variables, created_at, updated_at
+            FROM prompt_templates WHERE id = ?
+        """, (template_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            return None
+            
+        # 安全解析JSON，确保空值或无效值时返回默认值
+        def safe_json_loads(json_str, default=None):
+            if not json_str:
+                return default
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                return default
+            
+        # 处理角色类型，如果是逗号分隔的字符串，转换为列表
+        role_types = row[4]
+        if role_types and isinstance(role_types, str) and ',' in role_types:
+            role_types = [rt.strip() for rt in role_types.split(',')]
+        else:
+            role_types = safe_json_loads(role_types, [])
+            
+        # 构建完整模板对象
+        template = {
+            'id': row[0],
+            'name': row[1],
+            'description': row[2],
+            'format': row[3] or 'openai',  # 默认格式
+            'role_types': role_types,
+            'template_content': row[5],
+            'variables': safe_json_loads(row[6], []),
+            'created_at': row[7],
+            'updated_at': row[8]
+        }
+        
+        return template
+    
+    def update_template(self, template_id: str, template_data: Dict[str, Any]) -> bool:
+        """更新提示词模板信息
+        
+        Args:
+            template_id: 模板ID
+            template_data: 更新的模板数据
+            
+        Returns:
+            是否成功更新
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        
+        # 提取字段
+        update_fields = []
+        params = []
+        
+        # 处理各个可更新字段
+        field_map = {
+            'name': 'name',
+            'description': 'description',
+            'format': 'format',
+            'role_types': 'role_types',
+            'template_content': 'template_content',
+            'variables': 'variables'
+        }
+        
+        for key, field in field_map.items():
+            if key in template_data:
+                value = template_data[key]
+                if key in ('role_types', 'variables') and value is not None:
+                    value = json.dumps(value)
+                update_fields.append(f"{field} = ?")
+                params.append(value)
+        
+        if not update_fields:
+            # 没有要更新的字段
+            return False
+            
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        
+        # 添加模板ID到参数列表
+        params.append(template_id)
+        
+        # 执行更新
+        try:
+            cursor.execute(f"""
+                UPDATE prompt_templates 
+                SET {', '.join(update_fields)}
+                WHERE id = ?
+            """, params)
+            
+            if cursor.rowcount == 0:
+                # 没有找到要更新的模板
+                return False
+                
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.conn.rollback()
+            print(f"Error updating prompt template: {e}")
+            raise
+    
+    def delete_template(self, template_id: str) -> bool:
+        """删除提示词模板
+        
+        Args:
+            template_id: 模板ID
+            
+        Returns:
+            是否成功删除
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        
+        try:
+            # 先删除相关的角色默认模板关联
+            cursor.execute("DELETE FROM role_default_templates WHERE template_id = ?", (template_id,))
+            
+            # 再删除模板本身
+            cursor.execute("DELETE FROM prompt_templates WHERE id = ?", (template_id,))
+            if cursor.rowcount == 0:
+                # 没有找到要删除的模板
+                self.conn.rollback()
+                return False
+                
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.conn.rollback()
+            print(f"Error deleting prompt template: {e}")
+            raise
+    
+    def list_templates(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """列出提示词模板
+        
+        Args:
+            limit: 返回的最大记录数
+            offset: 偏移量
+            
+        Returns:
+            模板列表
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT id, name, description, format, role_types, template_content, variables, is_default, created_at, updated_at
+            FROM prompt_templates
+            ORDER BY name
+            LIMIT ? OFFSET ?
+        """, (limit, offset))
+        
+        templates = []
+        for row in cursor.fetchall():
+            # 安全解析JSON，确保空值或无效值时返回默认值
+            def safe_json_loads(json_str, default=None):
+                if not json_str:
+                    return default
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    return default
+            
+            # 处理角色类型，如果是逗号分隔的字符串，转换为列表
+            role_types = row[4]
+            if role_types and isinstance(role_types, str) and ',' in role_types:
+                role_types = [rt.strip() for rt in role_types.split(',')]
+            else:
+                role_types = safe_json_loads(role_types, [])
+            
+            template = {
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'format': row[3] or 'openai',  # 默认格式
+                'role_types': role_types,
+                'template_content': row[5],
+                'variables': safe_json_loads(row[6], []),
+                'is_default': bool(row[7]),
+                'created_at': row[8],
+                'updated_at': row[9]
+            }
+            templates.append(template)
+            
+        return templates
+    
+    def set_role_default_template(self, role_id: str, template_id: str) -> bool:
+        """设置角色的默认模板
+        
+        Args:
+            role_id: 角色ID
+            template_id: 模板ID
+            
+        Returns:
+            是否成功设置
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        
+        try:
+            # 检查角色和模板是否存在
+            cursor.execute("SELECT 1 FROM roles WHERE id = ?", (role_id,))
+            if not cursor.fetchone():
+                return False
+                
+            cursor.execute("SELECT 1 FROM prompt_templates WHERE id = ?", (template_id,))
+            if not cursor.fetchone():
+                return False
+            
+            # 检查是否已存在关联
+            cursor.execute(
+                "SELECT 1 FROM role_default_templates WHERE role_id = ? AND template_id = ?", 
+                (role_id, template_id)
+            )
+            if cursor.fetchone():
+                # 已经存在关联，视为成功
+                return True
+                
+            # 添加关联
+            cursor.execute("""
+                INSERT INTO role_default_templates (role_id, template_id)
+                VALUES (?, ?)
+            """, (role_id, template_id))
+            
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.conn.rollback()
+            print(f"Error setting role default template: {e}")
+            raise
+    
+    def remove_role_default_template(self, role_id: str, template_id: str) -> bool:
+        """移除角色的默认模板
+        
+        Args:
+            role_id: 角色ID
+            template_id: 模板ID
+            
+        Returns:
+            是否成功移除
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        
+        try:
+            cursor.execute("""
+                DELETE FROM role_default_templates 
+                WHERE role_id = ? AND template_id = ?
+            """, (role_id, template_id))
+            
+            if cursor.rowcount == 0:
+                # 没有找到要删除的关联
+                return False
+                
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.conn.rollback()
+            print(f"Error removing role default template: {e}")
+            raise
+    
+    def get_role_default_templates(self, role_id: str) -> List[Dict[str, Any]]:
+        """获取角色的默认模板列表
+        
+        Args:
+            role_id: 角色ID
+            
+        Returns:
+            模板列表
+        """
+        if not self.conn:
+            self.connect()
+            
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT pt.id, pt.name, pt.description, pt.format, pt.role_types, 
+                   pt.template_content, pt.variables, pt.is_default, pt.created_at, pt.updated_at
+            FROM prompt_templates pt
+            JOIN role_default_templates rdt ON pt.id = rdt.template_id
+            WHERE rdt.role_id = ?
+            ORDER BY pt.name
+        """, (role_id,))
+        
+        templates = []
+        for row in cursor.fetchall():
+            # 安全解析JSON，确保空值或无效值时返回默认值
+            def safe_json_loads(json_str, default=None):
+                if not json_str:
+                    return default
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    return default
+            
+            # 处理角色类型，如果是逗号分隔的字符串，转换为列表
+            role_types = row[4]
+            if role_types and isinstance(role_types, str) and ',' in role_types:
+                role_types = [rt.strip() for rt in role_types.split(',')]
+            else:
+                role_types = safe_json_loads(role_types, [])
+            
+            template = {
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'format': row[3] or 'openai',  # 默认格式
+                'role_types': role_types,
+                'template_content': row[5],
+                'variables': safe_json_loads(row[6], []),
+                'is_default': bool(row[7]),
+                'created_at': row[8],
+                'updated_at': row[9]
+            }
+            templates.append(template)
+            
+        return templates 
